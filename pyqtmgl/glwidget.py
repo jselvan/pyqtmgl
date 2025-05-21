@@ -1,4 +1,5 @@
 from typing import Sequence
+from pyqtmgl.cameras.screen import ScreenCamera
 from pyqtmgl.nodes.node import Node
 from pyqtmgl.cameras import Camera
 
@@ -30,6 +31,7 @@ class GLWidget(QOpenGLWidget):
 
     def initializeGL(self) -> None:
         self.ctx = moderngl.create_context()
+        self.screen_camera = ScreenCamera(self.width(), self.height())
         self.init()
 
     def update_context(self) -> None:

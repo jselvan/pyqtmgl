@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Literal
 
 import moderngl
 import numpy as np
@@ -56,13 +56,15 @@ class Line(Node):
         fragColor = g_color;
     }
     """
+    CTX_FLAGS = moderngl.DEPTH_TEST | moderngl.BLEND
     def __init__(self, 
-        ctx: moderngl.Context,
+        ctx: Optional[moderngl.Context]=None,
         points: Optional[np.ndarray]=None,
         colors: Optional[np.ndarray]=None,
         alphas: Optional[np.ndarray]=None,
-        indices: Optional[np.ndarray]=None,
-        size = 1
+        indices: Optional[np.ndarray | Literal['auto']]=None,
+        size = 1,
+        **kwargs
     ):
         """Line primitive
 
@@ -86,7 +88,8 @@ class Line(Node):
             points=points, 
             colors=colors, 
             alphas=alphas,
-            indices=indices)
+            indices=indices,
+            **kwargs)
 
     def draw(self, camera):
         if self.n_points == 0:

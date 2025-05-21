@@ -16,7 +16,7 @@ class ScatterWidget(GLWidget):
         return [self.scatter]
     @property
     def cameras(self):
-        return [self.camera]
+        return [self.camera, self.screen_camera]
     def init(self):
         self.scatter = Pointcloud(
             self.ctx, 

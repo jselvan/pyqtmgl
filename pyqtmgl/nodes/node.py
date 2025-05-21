@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional, SupportsFloat
 
 import moderngl
 import numpy as np
@@ -33,7 +33,7 @@ class Node:
     CTX_FLAGS = moderngl.DEPTH_TEST | moderngl.BLEND
     DRAW_MODE = moderngl.POINTS
 
-    def __init__(self, ctx, name):
+    def __init__(self, ctx: Optional[moderngl.Context], name):
         if ctx is None:
             self.ctx = None
         else:
@@ -41,6 +41,8 @@ class Node:
         self.name = name
         self.children: List[Node] = []
         self._is_3d = True
+        self.model = None
+        self.n_points = 0
 
     def __repr__(self):
         return self.name
@@ -57,6 +59,8 @@ class Node:
             child.set_context(ctx)
 
     def compile_program(self):
+        if self.ctx is None:
+            raise ValueError('No context set')
         self.program = self.ctx.program(
             vertex_shader=self.VERTEX,
             fragment_shader=self.FRAGMENT,
@@ -72,7 +76,34 @@ class Node:
 
     def update_variables(self, **kwargs):
         points = kwargs.pop('points', None)
-        if points is not None:
+        if points is None and any(dim in kwargs for dim in ['x', 'y', 'z']):
+            x = kwargs.pop('x', None)
+            y = kwargs.pop('y', None)
+            z = kwargs.pop('z', None)
+            if x is None:
+                if y is None:
+                    raise ValueError("x and y cannot both be None")
+                else:
+                    y = np.asarray(y)
+                x = np.arange(len(y))
+            elif y is None:
+                x = np.asarray(x)
+                y = np.arange(len(x))
+            else:
+                x = np.asarray(x)
+                y = np.asarray(y)
+            if x.shape != y.shape:
+                raise ValueError("x and y must have the same shape")
+            if z is None:
+                z = np.zeros_like(x)
+            else:
+                z = np.asarray(z)
+            if x.shape != z.shape:
+                raise ValueError("x and z must have the same shape")
+            points = np.array([x, y, z]).T
+            self.variables['points'] = points
+
+        elif points is not None:
             points = np.asarray(points)
             if points.ndim == 1:
                 points = points[:, None]
@@ -135,22 +166,27 @@ class Node:
             if colors.shape[1] != 3:
                 raise ValueError('Colors must be of shape (N, 3)')
             self.variables['colors'] = colors
-        if 'colors' not in self.variables:
+        if self.variables.get('colors') is None:
             self.variables['colors'] = np.ones((n_points, 3))
         
         alphas = kwargs.pop('alphas', None)
         if alphas is not None:
             if np.isscalar(alphas):
-                alphas = np.ones(n_points) * alphas
+                if not isinstance(alphas, SupportsFloat):
+                    raise ValueError('Alphas must be a scalar or an array')
+                alphas = np.ones(n_points) * float(alphas)
             else:
                 alphas = np.asarray(alphas)
             if alphas.shape[0] != n_points:
                 raise ValueError('Alphas must be of shape (N,)')
             self.variables['alphas'] = alphas[:, None]
-        if 'alphas' not in self.variables:
+        if self.variables.get('alphas') is None:
             self.variables['alphas'] = np.ones((n_points, 1))
 
         indices = kwargs.pop('indices', None)
+        if indices == 'auto':
+            indices = np.arange(n_points, dtype='i4')
+            indices = np.stack([indices[:-1], indices[1:]], axis=1).flatten()
         if indices is not None:
             # if indices.shape[1] != 2:
             #     raise ValueError('Indices must be of shape (N, 2)')
@@ -165,9 +201,12 @@ class Node:
 
     def _prepare_camera_uniforms(self, camera: Camera) -> None:
         projection, view = camera.get_matrices()
-        self.program['projection'].write(projection.to_bytes())
-        self.program['view'].write(view.to_bytes())
-        self.program['model'] = np.eye(4, dtype='f4').flatten()
+        self.program['projection'].write(projection.to_bytes()) # type: ignore
+        self.program['view'].write(view.to_bytes()) # type: ignore
+        if self.model is not None:
+            self.program['model'].write(self.model.to_bytes()) # type: ignore
+        else:
+            self.program['model'] = np.eye(4, dtype='f4').flatten()
 
     def draw(self, camera: Camera) -> None:
         if self.ctx is None:
@@ -183,6 +222,8 @@ class Node:
     def prepare_vao(self) -> None:
         """Get the vertex array object
         """
+        if self.ctx is None:
+            raise ValueError('No context set')
         data = np.concatenate([
             self.variables['points'], 
             self.variables['colors'], 

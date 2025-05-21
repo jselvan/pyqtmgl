@@ -1,3 +1,5 @@
+from typing import Optional, List, Mapping
+
 from PyQt5 import QtCore, QtWidgets, QtGui
 import numpy as np
 
@@ -22,7 +24,7 @@ class ContinuousViewer(GLWidget):
         if self.points is not None:
             self.set_data(self.points, self.colours)
         
-        self.actions = {}
+        self.actions: Mapping[str, QtWidgets.QAction] = {}
         self.actions["scroll_forward"] = QtWidgets.QAction("Scroll Forward", self)
         self.actions["scroll_backward"] = QtWidgets.QAction("Scroll Backward", self)
         self.actions["scroll_forward"].triggered.connect(lambda: self.move(1))
